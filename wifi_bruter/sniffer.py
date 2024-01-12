@@ -56,4 +56,6 @@ if __name__ == "__main__":
 
     ssid = input("Choose ssid: ")
 
-    capture_handshake(interface="ens33", target_bssid=ssid)
+    interface = input("Choose interface: ")
+
+    capture_handshake(interface=interface, target_bssid=ssid)
