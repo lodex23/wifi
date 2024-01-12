@@ -1,14 +1,14 @@
-import socket
+import subprocess
 import struct
 import time
-import os
+import socket
 
 def capture_handshake(interface, target_bssid):
     print(f"Capturing handshake on {interface} for {target_bssid}...")
 
     try:
         # Create a raw socket to sniff Wi-Fi frames
-        raw_socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.htons(0x0003))
+        raw_socket = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(3))
 
         # Set the interface in promiscuous mode
         raw_socket.bind((interface, 0))
@@ -17,7 +17,7 @@ def capture_handshake(interface, target_bssid):
         start_time = time.time()
         handshake_captured = False
 
-        while time.time() - start_time < 15:  # Capture frames for 15 seconds (adjust as needed)
+        while time.time() - start_time < 120:  # Capture frames for 15 seconds (adjust as needed)
             packet = raw_socket.recvfrom(2048)[0]
 
             # Extract BSSID from the 802.11 frame
@@ -41,8 +41,9 @@ def get_ssids():
     print("Scanning for available SSIDs...")
 
     try:
-        result = os.popen("netsh wlan show networks mode=Bssid").read()
-        ssids = [line.strip() for line in result.split('\n') if "SSID" in line]
+        result = subprocess.check_output(["iwlist", "scan"])
+        result = result.decode("utf-8")
+        ssids = [line.strip().split(":")[1] for line in result.split('\n') if "ESSID" in line]
 
         for ssid in ssids:
             print(f"SSID found: {ssid}")
@@ -51,9 +52,8 @@ def get_ssids():
         print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
+    get_ssids()
 
-        get_ssids()
+    ssid = input("Choose ssid: ")
 
-        ssid = input("Choose ssid: ")
-
-        capture_handshake(interface="Wireless LAN adapter Wi-Fi", target_bssid=ssid)
+    capture_handshake(interface="ens33", target_bssid=ssid)
