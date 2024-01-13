@@ -1,61 +1,57 @@
 import subprocess
-import struct
-import time
-import socket
+import os
 
-def capture_handshake(interface, target_bssid):
-    print(f"Capturing handshake on {interface} for {target_bssid}...")
-
+def get_ssids(interface):
     try:
-        # Create a raw socket to sniff Wi-Fi frames
-        raw_socket = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(3))
+        # Kill any processes that might interfere
+        subprocess.run(['airmon-ng', 'check', 'kill'])
 
-        # Set the interface in promiscuous mode
-        raw_socket.bind((interface, 0))
+        # Start the monitor mode
+        subprocess.run(['airmon-ng', 'start', interface])
 
-        # Start capturing frames
-        start_time = time.time()
-        handshake_captured = False
+        # Stop NetworkManager (if running)
+        subprocess.run(['sudo', 'systemctl', 'stop', 'NetworkManager'])
 
-        while time.time() - start_time < 120:  # Capture frames for 15 seconds (adjust as needed)
-            packet = raw_socket.recvfrom(2048)[0]
+        # Run airodump-ng to scan for SSIDs in the background
+        airodump_process = subprocess.Popen(['airodump-ng', interface])
 
-            # Extract BSSID from the 802.11 frame
-            bssid = struct.unpack("!6s6s6s", packet[36:54])[2]
+        # Wait for user input to stop the process
+        input("Press Enter to stop scanning...")
 
-            if bssid == target_bssid.encode():
-                print("Handshake captured!")
-                handshake_captured = True
-                break
-
-        if not handshake_captured:
-            print("Handshake not captured within the time limit.")
-
-        # Close the socket
-        raw_socket.close()
+        # Terminate the airodump-ng process
+        airodump_process.terminate()
 
     except Exception as e:
         print(f"An error occurred: {e}")
 
-def get_ssids():
-    print("Scanning for available SSIDs...")
+def capture_handshake(interface, output_file, target_bssid=None, channel=None):
+    if not target_bssid:
+        target_bssid = input("Enter the target BSSID (MAC address): ")
+
+    if not channel:
+        channel = input("Enter the channel of the target network: ")
+
+    print(f"Capturing handshake on {interface} for {target_bssid} on channel {channel}...")
 
     try:
-        result = subprocess.check_output(["iwlist", "scan"])
-        result = result.decode("utf-8")
-        ssids = [line.strip().split(":")[1] for line in result.split('\n') if "ESSID" in line]
+        # Start airodump-ng to capture the handshake
+        subprocess.run(['airodump-ng', '--bssid', target_bssid, '-c', channel, '--write', output_file, interface])
 
-        for ssid in ssids:
-            print(f"SSID found: {ssid}")
+        print("Handshake captured!")
 
     except Exception as e:
         print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
-    get_ssids()
+    interface = "wlx1cbfceba6bcb"
 
-    ssid = input("Choose ssid: ")
+    # Run get_ssids to scan for available SSIDs
+    get_ssids(interface)
 
-    interface = input("Choose interface: ")
+    # Capture handshake with specified BSSID, channel, and output file
+    target_bssid = input("Enter the target BSSID (MAC address): ")
+    channel = input("Enter the channel of the target network: ")
+    output_file = input("Enter the output file path for the handshake capture: ")
 
-    capture_handshake(interface=interface, target_bssid=ssid)
+    # Run the capture_handshake function
+    capture_handshake(interface=interface, target_bssid=target_bssid, output_file=output_file, channel=channel)
